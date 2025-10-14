@@ -1,8 +1,7 @@
 import pandas as pd
-from langchain.tools import tool
+from smolagents import tool
 
 # Data is hard-coded so that the agent can call them without passing the dataframe as an argument.
-# We cannot use a class because LangChain does not support tools inside classes.
 PROJECT_TASKS = pd.read_csv("data/processed/project_tasks.csv", dtype=str)
 
 
@@ -14,8 +13,8 @@ def reset_state():
     PROJECT_TASKS = pd.read_csv("data/processed/project_tasks.csv", dtype=str)
 
 
-@tool("project_management.get_task_information_by_id", return_direct=False)
-def get_task_information_by_id(task_id=None, field=None):
+@tool
+def get_task_information_by_id(task_id: str = None, field: str = None) -> dict:
     """
     Returns the task infomration for a given ID.
     
@@ -41,8 +40,8 @@ def get_task_information_by_id(task_id=None, field=None):
         return "Task not found."
 
 
-@tool("project_management.search_tasks", return_direct=False)
-def search_tasks(task_name=None, assigned_to_email=None, list_name=None, due_date=None, board=None):
+@tool
+def search_tasks(task_name: str = None, assigned_to_email: str = None, list_name: str = None, due_date: str = None, board: str = None) -> list:
     """
     Searches for tasks based on the given parameters.
     
@@ -73,8 +72,8 @@ def search_tasks(task_name=None, assigned_to_email=None, list_name=None, due_dat
     return tasks.to_dict(orient="records")
 
 
-@tool("project_management.create_task", return_direct=False)
-def create_task(task_name=None, assigned_to_email=None, list_name=None, due_date=None, board=None):
+@tool
+def create_task(task_name: str = None, assigned_to_email: str = None, list_name: str = None, due_date: str = None, board: str = None) -> str:
     """
     Creates a new task.
     
@@ -117,8 +116,8 @@ def create_task(task_name=None, assigned_to_email=None, list_name=None, due_date
     return task_id
 
 
-@tool("project_management.delete_task", return_direct=False)
-def delete_task(task_id=None):
+@tool
+def delete_task(task_id: str = None) -> str:
     """
     Deletes a task by ID.
     
@@ -141,8 +140,8 @@ def delete_task(task_id=None):
         return "Task not found."
 
 
-@tool("project_management.update_task", return_direct=False)
-def update_task(task_id=None, field=None, new_value=None):
+@tool
+def update_task(task_id: str = None, field: str = None, new_value: str = None) -> str:
     """
     Updates a task by ID.
     
@@ -178,3 +177,11 @@ def update_task(task_id=None, field=None, new_value=None):
             return "Field not valid."
     else:
         return "Task not found."
+
+project_management_tools = [
+    get_task_information_by_id,
+    search_tasks,
+    create_task,
+    delete_task,
+    update_task,
+]

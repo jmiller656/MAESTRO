@@ -7,6 +7,7 @@ from langchain_openai import ChatOpenAI, OpenAI
 from langchain_community.chat_models.anthropic import ChatAnthropic
 from langchain_community.chat_models.anyscale import ChatAnyscale
 from langchain.agents import initialize_agent, AgentType
+from src.tools_smolagents.tracking import create_function_tracker, wrap_tool
 import csv
 from src.tools import calendar, email, analytics, project_management, customer_relationship_manager, company_directory
 from src.data_generation.data_generation_utils import HARDCODED_CURRENT_TIME
@@ -20,23 +21,74 @@ from src.tools.toolkits import (
     tools_with_side_effects,
 )
 
+from src.tools_smolagents.toolkits import (
+    calendar_toolkit as smol_calendar_toolkit,
+    email_toolkit as smol_email_toolkit,
+    analytics_toolkit as smol_analytics_toolkit,
+    project_management_toolkit as smol_project_management_toolkit,
+    customer_relationship_manager_toolkit as smol_customer_relationship_manager_toolkit,
+    company_directory_toolkit as smol_company_directory_toolkit,
+    tools_with_side_effects as smol_tools_with_side_effects,
+    GLOBAL_TOOL_TRACKER
+)
+
+from src.tools_improved.toolkits import (
+    calendar_toolkit as calendar_toolkit_improved,
+    email_toolkit as email_toolkit_improved,
+    project_management_toolkit as project_management_toolkit_improved,
+    customer_relationship_manager_toolkit as customer_relationship_manager_toolkit_improved,
+    company_directory_toolkit as company_directory_toolkit_improved,
+    tools_with_side_effects as tools_with_side_effects_improved
+)
+
+from src.tools_improved_smolagents.toolkits import (
+    calendar_toolkit as smol_calendar_toolkit_improved,
+    email_toolkit as smol_email_toolkit_improved,
+    analytics_toolkit as smol_analytics_toolkit_improved,
+    project_management_toolkit as smol_project_management_toolkit_improved,
+    customer_relationship_manager_toolkit as smol_customer_relationship_manager_toolkit_improved,
+    company_directory_toolkit as smol_company_directory_toolkit_improved,
+    tools_with_side_effects as smol_tools_with_side_effects_improved,
+)
+
+from tqdm.auto import tqdm
+
+# Import for SmolAgents (only if requested, to avoid import errors when not needed)
+smolagents = None
+try:
+    from smolagents import CodeAgent
+    from smolagents.models import LiteLLMModel
+except ImportError:
+    pass
+
 
 DOMAINS = [calendar, email, analytics, project_management, customer_relationship_manager]
 AVAILABLE_LLMS = [
-    "gpt-4",
-    "gpt-3.5",
-    "claude-2",
-    "llama2-70b",
-    "mistral-8x7B",
+    "gpt-4o-2024-08-06",
+    "gpt-4o-mini-2024-07-18",
+    "llama3.3-70b",
+    "llama3.1-8b",
+    "qwen-2.5-72b",
+    "qwen-2.5-7b"
 ]
 
 
 def convert_agent_action_to_function_call(action):
     """Converts langchain_core.agents.AgentAction to an API call"""
+    # Handle string input case
+    if isinstance(action.tool_input, str):
+        return f'{action.tool}.func("{action.tool_input}")'
     args = []
     for k, v in action.tool_input.items():
         args.append(f'{k}="{v}"')
     return action.tool + ".func(" + ", ".join(args) + ")"
+
+def convert_agent_action_to_function_call_hf(action):
+    """Converts langchain_core.agents.AgentAction to an API call"""
+    args = []
+    for k, v in action['parameters'].items():
+        args.append(f'{k}="{v}"')
+    return action['function_name'] + ".func(" + ", ".join(args) + ")"
 
 
 def execute_actions_and_reset_state(actions):
@@ -550,11 +602,14 @@ def get_output(full_response):
     simplified_string = simplified_string.split("intermediate_steps")[0]
     simplified_string = simplified_string[:-3] + "}"
 
-    a = ast.literal_eval(simplified_string)
-    return a["output"]
+    try:
+        a = ast.literal_eval(simplified_string)
+        return a["output"]
+    except:
+        return full_response
 
 
-def get_latest_results_path(results_root_dir, model, tool, all_tools_in_prompt=True):
+def get_latest_results_path(results_root_dir, model, tool, all_tools_in_prompt=True, tool_set=None):
     """Get the latest results file path and ground truth path for a given model and tool"""
     results_dir = os.path.join(results_root_dir, tool)
     results_files = os.listdir(results_dir)
@@ -563,6 +618,11 @@ def get_latest_results_path(results_root_dir, model, tool, all_tools_in_prompt=T
         model_results_files = [file for file in model_results_files if "all" in file]
     else:
         model_results_files = [file for file in model_results_files if "domains" in file]
+    
+    # Filter by tool_set if specified
+    if tool_set:
+        model_results_files = [file for file in model_results_files if tool_set in os.path.basename(file)]
+    
     ground_truth_path = os.path.join("data", "processed", "queries_and_answers", f"{tool}_queries_and_answers.csv")
     if not len(model_results_files):
         return None
@@ -608,31 +668,48 @@ def get_latest_results_from_dir(results_root_dir, model, tool, print_errors=Fals
         )
 
 
-def get_toolkits(toolkits):
+def get_toolkits(toolkits, tool_set='original'):
     """Get the toolkits to be used for the agent."""
     tools = []
+    
+    # Define toolkits based on the tool_set
+    if tool_set == 'original':
+        email_tk, calendar_tk, analytics_tk, project_management_tk, customer_relationship_manager_tk, company_directory_tk = \
+            email_toolkit, calendar_toolkit, analytics_toolkit, project_management_toolkit, customer_relationship_manager_toolkit, company_directory_toolkit
+    elif tool_set == 'improved':
+        email_tk, calendar_tk, analytics_tk, project_management_tk, customer_relationship_manager_tk, company_directory_tk = \
+            email_toolkit_improved, calendar_toolkit_improved, analytics_toolkit, project_management_toolkit_improved, customer_relationship_manager_toolkit_improved, company_directory_toolkit_improved
+    elif tool_set == 'smolagents':
+        email_tk, calendar_tk, analytics_tk, project_management_tk, customer_relationship_manager_tk, company_directory_tk = \
+            smol_email_toolkit, smol_calendar_toolkit, smol_analytics_toolkit, smol_project_management_toolkit, smol_customer_relationship_manager_toolkit, smol_company_directory_toolkit
+    elif tool_set == 'smolagents_improved':
+        email_tk, calendar_tk, analytics_tk, project_management_tk, customer_relationship_manager_tk, company_directory_tk = \
+            smol_email_toolkit_improved, smol_calendar_toolkit_improved, smol_analytics_toolkit_improved, smol_project_management_toolkit_improved, smol_customer_relationship_manager_toolkit_improved, smol_company_directory_toolkit_improved
+    else:
+        raise ValueError(f"Invalid tool_set: {tool_set}. Must be one of 'original', 'improved', 'smolagents', or 'improved_smolagents'.")
+    
     if "email" in toolkits:
-        tools += email_toolkit
+        tools += email_tk
     if "calendar" in toolkits:
-        tools += calendar_toolkit
+        tools += calendar_tk
     if "analytics" in toolkits:
-        tools += analytics_toolkit
+        tools += analytics_tk
     if "project_management" in toolkits:
-        tools += project_management_toolkit
+        tools += project_management_tk
     if "customer_relationship_manager" in toolkits:
-        tools += customer_relationship_manager_toolkit
+        tools += customer_relationship_manager_tk
     # The company directory toolkit is always included in order to find email addresses by name
-    tools += company_directory_toolkit
+    tools += company_directory_tk
     return tools
 
 
-def generate_results(queries_path, model_name, tool_selection="all", num_retrys=0):
+def generate_results(queries_path, model_name, tool_selection="all", num_retrys=0, agent_engine="langchain", tool_set='original'):
     """Generates results for a given model and set of queries. Saves the results to a csv file."""
     toolkits = ["email", "calendar", "analytics", "project_management", "customer_relationship_manager"]
     queries_df = pd.read_csv(queries_path)
     queries = queries_df["query"].tolist()
 
-    results = pd.DataFrame(columns=["query", "function_calls", "full_response", "error"])
+    results = pd.DataFrame(columns=["query", "function_calls", "full_response", "error", "tool_set"])
     if model_name == "gpt-3.5":
         OPENAI_KEY = open("openai_key.txt", "r").read()
         llm = OpenAI(
@@ -641,96 +718,182 @@ def generate_results(queries_path, model_name, tool_selection="all", num_retrys=
             temperature=0,
             model_kwargs={"seed": 42},
         )
-    elif model_name == "gpt-4":
+    elif model_name.startswith("gpt"):
         OPENAI_KEY = open("openai_key.txt", "r").read()
         llm = ChatOpenAI(
-            model_name="gpt-4-0125-preview",
+            model_name=model_name,
             openai_api_key=OPENAI_KEY,
             temperature=0,
             model_kwargs={"seed": 42},
         )
-    elif model_name == "claude-2":
-        ANTHROPIC_KEY = open("anthropic_key.txt", "r").read()
-        llm = ChatAnthropic(
-            model_name="claude-2",
-            anthropic_api_key=ANTHROPIC_KEY,
+    elif model_name == "llama3.3-70b":
+        OPENROUTER_KEY = open("openrouter_key.txt", "r").read()
+        llm = ChatOpenAI(
+            model_name="meta-llama/llama-3.3-70b-instruct",
+            api_key = OPENROUTER_KEY,
             temperature=0,
+            base_url = 'https://openrouter.ai/api/v1'
         )
-    elif model_name == "llama2-70b":
-        ANYSCALE_KEY = open("anyscale_key.txt", "r").read()
-        llm = ChatAnyscale(
-            model="meta-llama/Llama-2-70b-chat-hf",
-            anyscale_api_key=ANYSCALE_KEY,
+    elif model_name == "llama3.1-8b":
+        OPENROUTER_KEY = open("openrouter_key.txt", "r").read()
+        llm = ChatOpenAI(
+            model="meta-llama/llama-3.1-8b-instruct",
+            api_key = OPENROUTER_KEY,
             temperature=0,
+            base_url = 'https://openrouter.ai/api/v1'
         )
-    elif model_name == "mistral-8x7B":
-        ANYSCALE_KEY = open("anyscale_key.txt", "r").read()
-        llm = ChatAnyscale(
-            model="mistralai/Mixtral-8x7B-Instruct-v0.1",
-            anyscale_api_key=ANYSCALE_KEY,
+    elif model_name == "qwen-2.5-72b":
+        OPENROUTER_KEY = open("openrouter_key.txt", "r").read()
+        llm = ChatOpenAI(
+            model="qwen/qwen-2.5-72b-instruct",
+            api_key = OPENROUTER_KEY,
             temperature=0,
+            base_url = 'https://openrouter.ai/api/v1'
+        )
+    elif model_name == "qwen-2.5-7b":
+        OPENROUTER_KEY = open("openrouter_key.txt", "r").read()
+        llm = ChatOpenAI(
+            model="qwen/qwen-2.5-7b-instruct",
+            api_key = OPENROUTER_KEY,
+            temperature=0,
+            base_url = 'https://openrouter.ai/api/v1'
         )
 
     else:
         raise ValueError("Invalid --model_name. Must be one of " + ", ".join(AVAILABLE_LLMS))
 
-    tools = get_toolkits(toolkits)
+    # Determine the tool_set based on agent_engine for backward compatibility
+    actual_tool_set = tool_set
+    if agent_engine == "smolagents":
+        if tool_set == 'original':
+            actual_tool_set = 'smolagents'
+        elif tool_set == 'improved':
+            actual_tool_set = 'smolagents_improved'
+    
+    tools = get_toolkits(toolkits, tool_set=actual_tool_set)
 
-    for i, query in enumerate(queries):
+    for i, query in tqdm(list(enumerate(queries))):
         if tool_selection == "domains":
             toolkits = queries_df["domains"].iloc[i].strip("][").replace("'", "").split(", ")
-            tools = get_toolkits(toolkits)
+            tools = get_toolkits(toolkits, tool_set=actual_tool_set)
 
-        agent = initialize_agent(
-            llm=llm,
-            agent=AgentType.STRUCTURED_CHAT_ZERO_SHOT_REACT_DESCRIPTION,
-            tools=tools,
-            verbose=True,
-            return_intermediate_steps=True,
-            max_iterations=20,
-            max_execution_time=120,
-        )
-        agent.agent.llm_chain.prompt.messages[0].prompt.template = (
-            f"Today's date is {HARDCODED_CURRENT_TIME.strftime('%A')}, {HARDCODED_CURRENT_TIME.date()} and the current time is {HARDCODED_CURRENT_TIME.time()}. Remember the current date and time when answering queries. Meetings must not start before 9am or end after 6pm."
-            + agent.agent.llm_chain.prompt.messages[0].prompt.template
-        )
-        error = ""
-        function_calls = []
-        response = ""
-        try:
-            response = agent({"input": query})
-            for step in response["intermediate_steps"]:
-                function_calls.append(convert_agent_action_to_function_call(step[-2]))
-            if len(response["intermediate_steps"]) == 0:
-                for retry_num in range(num_retrys):
-                    temprature_for_retry = 0.5
-                    agent.agent.llm_chain.llm.temperature=temprature_for_retry
-                    print(f"No actions taken. Retry {retry_num + 1} of {num_retrys}")
-                    response = agent({"input": query})
-                    for step in response["intermediate_steps"]:
-                        function_calls.append(convert_agent_action_to_function_call(step[-2]))
-                    if len(response["intermediate_steps"]) > 0:
-                        break
-            error = (
-                response["output"]
-                if response["output"] == "Agent stopped due to iteration limit or time limit."
-                else error
+        if agent_engine == "smolagents":
+            # Initialize the appropriate model based on model_name
+            if model_name.startswith("gpt"):
+                model = LiteLLMModel(model_id=model_name, api_key=OPENAI_KEY)
+            elif model_name == "llama3.3-70b":
+                OPENROUTER_KEY = open("openrouter_key.txt", "r").read()
+                model = LiteLLMModel(
+                    model_id="openrouter/meta-llama/llama-3.3-70b-instruct",
+                    api_key = OPENROUTER_KEY,
+                    temperature=0,
+                )
+            elif model_name == "llama3.1-8b":
+                OPENROUTER_KEY = open("openrouter_key.txt", "r").read()
+                model = LiteLLMModel(
+                    model_id="openrouter/meta-llama/llama-3.1-8b-instruct",
+                    api_key = OPENROUTER_KEY,
+                    temperature=0,
+                )
+            elif model_name == "qwen-2.5-72b":
+                OPENROUTER_KEY = open("openrouter_key.txt", "r").read()
+                model = LiteLLMModel(
+                    model_id="openrouter/qwen/qwen-2.5-72b-instruct",
+                    api_key = OPENROUTER_KEY,
+                    temperature=0,
+                )
+            elif model_name == "qwen-2.5-7b":
+                OPENROUTER_KEY = open("openrouter_key.txt", "r").read()
+                model = LiteLLMModel(
+                    model_id="openrouter/qwen/qwen-2.5-7b-instruct",
+                    api_key = OPENROUTER_KEY,
+                    temperature=0,
+                )
+            
+            GLOBAL_TOOL_TRACKER.clear()
+
+            # Create the SmolAgents agent
+
+            print(model_name)
+            print(model)
+
+            agent = CodeAgent(
+                tools=tools,
+                model=model,
             )
 
-        except Exception as e:
-            # APIs for the LLMs we support have different error messages for when the context window is exceeded
-            context_window_error_messages = [
-                "maximum input length",
-                "maximum context length",
-                "prompt is too long",
-                "Request too large",
-            ]
-            if any([msg in str(e) for msg in context_window_error_messages]):
-                print(f"Context window exceeded with query: {query}")
-                error = "Context window exceeded"
-            else:
-                print(f"Unknown error with query: {query}")
+            prompt_template = (
+                f"Today's date is {HARDCODED_CURRENT_TIME.strftime('%A')}, {HARDCODED_CURRENT_TIME.date()} and the current time is {HARDCODED_CURRENT_TIME.time()}. Remember the current date and time when answering queries. Meetings must not start before 9am or end after 6pm."
+            )
+
+            error = ""
+            function_calls = []
+            response = ""
+            try:
+                response = agent.run(prompt_template+"\n"+query)
+            except Exception as e:
                 error = str(e)
+
+            function_calls = []
+
+            for item in GLOBAL_TOOL_TRACKER:
+                function_calls.append(convert_agent_action_to_function_call_hf(item))
+
+            GLOBAL_TOOL_TRACKER.clear()
+            
+        else:  # Default to langchain
+            agent = initialize_agent(
+                llm=llm,
+                agent=AgentType.STRUCTURED_CHAT_ZERO_SHOT_REACT_DESCRIPTION,
+                tools=tools,
+                verbose=True,
+                return_intermediate_steps=True,
+                max_iterations=20,
+                max_execution_time=120,
+            )
+            agent.agent.llm_chain.prompt.messages[0].prompt.template = (
+                f"Today's date is {HARDCODED_CURRENT_TIME.strftime('%A')}, {HARDCODED_CURRENT_TIME.date()} and the current time is {HARDCODED_CURRENT_TIME.time()}. Remember the current date and time when answering queries. Meetings must not start before 9am or end after 6pm."
+                + agent.agent.llm_chain.prompt.messages[0].prompt.template
+            )
+            error = ""
+            function_calls = []
+            response = ""
+            try:
+                response = agent({"input": query})
+                for step in response["intermediate_steps"]:
+                    function_calls.append(convert_agent_action_to_function_call(step[-2]))
+                if len(response["intermediate_steps"]) == 0:
+                    for retry_num in range(num_retrys):
+                        temprature_for_retry = 0.5
+                        agent.agent.llm_chain.llm.temperature=temprature_for_retry
+                        print(f"No actions taken. Retry {retry_num + 1} of {num_retrys}")
+                        response = agent({"input": query})
+                        for step in response["intermediate_steps"]:
+                            function_calls.append(convert_agent_action_to_function_call(step[-2]))
+                        if len(response["intermediate_steps"]) > 0:
+                            break
+                error = (
+                    response["output"]
+                    if response["output"] == "Agent stopped due to iteration limit or time limit."
+                    else error
+                )
+
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                # APIs for the LLMs we support have different error messages for when the context window is exceeded
+                context_window_error_messages = [
+                    "maximum input length",
+                    "maximum context length",
+                    "prompt is too long",
+                    "Request too large",
+                ]
+                if any([msg in str(e) for msg in context_window_error_messages]):
+                    print(f"Context window exceeded with query: {query}")
+                    error = "Context window exceeded"
+                else:
+                    print(f"Unknown error with query: {query}")
+                    error = str(e)
 
         print(f"### Query: {query}")
         print(f"### Answer: {function_calls}")
@@ -745,9 +908,10 @@ def generate_results(queries_path, model_name, tool_selection="all", num_retrys=
                             function_calls,
                             str(response),
                             error,
+                            tool_set,
                         ]
                     ],
-                    columns=["query", "function_calls", "full_response", "error"],
+                    columns=["query", "function_calls", "full_response", "error", "tool_set"],
                 ),
             ],
             ignore_index=True,
@@ -762,6 +926,6 @@ def generate_results(queries_path, model_name, tool_selection="all", num_retrys=
 
     # Removes microseconds and makes it more readable
     current_datetime = str(pd.Timestamp.now()).split(".")[0].replace(" ", "_").replace(":", "-")
-    save_path = os.path.join(save_dir, model_name + "_" + tool_selection + "_" + current_datetime + ".csv")
+    save_path = os.path.join(save_dir, model_name + "_" + agent_engine + "_" + tool_selection + "_" + tool_set + "_" + current_datetime + ".csv")
     results.to_csv(save_path, index=False, quoting=csv.QUOTE_ALL)
     return results

@@ -1,6 +1,5 @@
 import pandas as pd
-from langchain.tools import tool
-
+from smolagents import tool
 from src.data_generation.data_generation_utils import HARDCODED_CURRENT_TIME
 
 # Data is hard-coded so that the agent can call them without passing the dataframe as an argument.
@@ -16,8 +15,8 @@ def reset_state():
     EMAILS = pd.read_csv("data/processed/emails.csv", dtype=str)
 
 
-@tool("email.get_email_information_by_id", return_direct=False)
-def get_email_information_by_id(email_id=None, field=None):
+@tool
+def get_email_information_by_id(email_id: str = None, field: str = None) -> dict:
     """
     Retrieves specific details of an email by its ID.
     
@@ -45,9 +44,8 @@ def get_email_information_by_id(email_id=None, field=None):
     else:
         return "Email not found."
 
-
-@tool("email.search_emails", return_direct=False)
-def search_emails(query="", date_min=None, date_max=None):
+@tool
+def search_emails(query: str = "", date_min: str = None, date_max: str = None) -> list:
     """
     Searches for emails matching the given query across subject, body, or sender fields.
     The function matches an email if all words in the query appear in any of these fields.
@@ -86,9 +84,8 @@ def search_emails(query="", date_min=None, date_max=None):
     else:
         return "No emails found."
 
-
-@tool("email.send_email", return_direct=False)
-def send_email(recipient=None, subject=None, body=None):
+@tool
+def send_email(recipient: str = None, subject: str = None, body: str = None) -> str:
     """
     Sends an email to the specified recipient.
     
@@ -121,9 +118,8 @@ def send_email(recipient=None, subject=None, body=None):
 
     return "Email sent successfully."
 
-
-@tool("email.delete_email", return_direct=False)
-def delete_email(email_id=None):
+@tool
+def delete_email(email_id: str = None) -> str:
     """
     Deletes an email by its ID.
     
@@ -145,9 +141,8 @@ def delete_email(email_id=None):
     else:
         return "Email not found."
 
-
-@tool("email.forward_email", return_direct=False)
-def forward_email(email_id=None, recipient=None):
+@tool
+def forward_email(email_id: str = None, recipient: str = None) -> str:
     """
     Forwards an email to the specified recipient.
     
@@ -171,9 +166,8 @@ def forward_email(email_id=None, recipient=None):
     result = send_email.func(recipient, f"FW: {email['subject']}", email["body"])
     return "Email forwarded successfully." if result == "Email sent successfully." else result
 
-
-@tool("email.reply_email", return_direct=False)
-def reply_email(email_id=None, body=None):
+@tool
+def reply_email(email_id: str = None, body: str = None) -> str:
     """
     Replies to an email by its ID.
     
@@ -193,3 +187,12 @@ def reply_email(email_id=None, body=None):
     email = EMAILS[EMAILS["email_id"] == email_id].to_dict(orient="records")[0]
     result = send_email.func(email["sender/recipient"], f"{email['subject']}", body)
     return "Email replied successfully." if result == "Email sent successfully." else result
+
+email_tools = [
+    get_email_information_by_id,
+    search_emails,
+    send_email,
+    delete_email,
+    forward_email,
+    reply_email,    
+]

@@ -1,5 +1,5 @@
 import pandas as pd
-from langchain.tools import tool
+from smolagents import tool
 
 CRM_DATA = pd.read_csv("data/processed/customer_relationship_manager_data.csv", dtype=str)
 
@@ -12,18 +12,18 @@ def reset_state():
     CRM_DATA = pd.read_csv("data/processed/customer_relationship_manager_data.csv", dtype=str)
 
 
-@tool("customer_relationship_manager.search_customers", return_direct=False)
+@tool
 def search_customers(
-    customer_name=None,
-    customer_email=None,
-    product_interest=None,
-    status=None,
-    assigned_to_email=None,
-    last_contact_date_min=None,
-    last_contact_date_max=None,
-    follow_up_by_min=None,
-    follow_up_by_max=None,
-):
+    customer_name: str = None,
+    customer_email: str = None,
+    product_interest: str = None,
+    status: str = None,
+    assigned_to_email: str = None,
+    last_contact_date_min: str = None,
+    last_contact_date_max: str = None,
+    follow_up_by_min: str = None,
+    follow_up_by_max: str = None,
+) -> list:
     """
     Searches for customers based on the given parameters.
     
@@ -40,9 +40,9 @@ def search_customers(
     
     Examples:
     >>> crm.search_customers(customer_name="John")
-    {{"customer_id": "00000001", "assigned_to_email": "sam@example.com", "customer_name": "John Smith",
+    {"customer_id": "00000001", "assigned_to_email": "sam@example.com", "customer_name": "John Smith",
     "customer_email": "john.smith@example.com", "customer_phone": "123-456-7890", "last_contact_date": "2023-01-01",
-    "product_interest": "Software", "status": "Qualified", "follow_up_by": "2023-01-15", "notes": "Had a call on 2023-01-01. "}}
+    "product_interest": "Software", "status": "Qualified", "follow_up_by": "2023-01-15", "notes": "Had a call on 2023-01-01. "}
     """
     customers = CRM_DATA.copy()
     if not any(
@@ -81,8 +81,8 @@ def search_customers(
     return customers.to_dict(orient="records")[:5]
 
 
-@tool("customer_relationship_manager.update_customer", return_direct=False)
-def update_customer(customer_id=None, field=None, new_value=None):
+@tool
+def update_customer(customer_id: str = None, field: str = None, new_value: str = None) -> str:
     """
     Updates a customer record by ID.
     
@@ -106,7 +106,7 @@ def update_customer(customer_id=None, field=None, new_value=None):
     if field == "product_interest" and new_value not in ["Software", "Hardware", "Services", "Consulting", "Training"]:
         return "Product interest not valid. Please choose from: 'Software', 'Hardware', 'Services', 'Consulting', 'Training'"
 
-    if field == "customer_email" or field == "assigned_to_email":
+    if field in ["customer_email", "assigned_to_email"]:
         new_value = new_value.lower()
 
     if customer_id in CRM_DATA["customer_id"].values:
@@ -119,18 +119,18 @@ def update_customer(customer_id=None, field=None, new_value=None):
         return "Customer not found."
 
 
-@tool("customer_relationship_manager.add_customer", return_direct=False)
+@tool
 def add_customer(
-    customer_name=None,
-    assigned_to_email=None,
-    status=None,
-    customer_email=None,
-    customer_phone=None,
-    last_contact_date=None,
-    product_interest=None,
-    notes="",
-    follow_up_by=None,
-):
+    customer_name: str = None,
+    assigned_to_email: str = None,
+    status: str = None,
+    customer_email: str = None,
+    customer_phone: str = None,
+    last_contact_date: str = None,
+    product_interest: str = None,
+    notes: str = "",
+    follow_up_by: str = None,
+) -> str:
     """
     Adds a new customer record.
     
@@ -176,8 +176,8 @@ def add_customer(
     return new_id
 
 
-@tool("customer_relationship_manager.delete_customer", return_direct=False)
-def delete_customer(customer_id=None):
+@tool
+def delete_customer(customer_id: str = None) -> str:
     """
     Deletes a customer record by ID.
     
@@ -195,3 +195,10 @@ def delete_customer(customer_id=None):
         return "Customer not found."
     CRM_DATA = CRM_DATA[CRM_DATA["customer_id"] != customer_id]
     return "Customer deleted successfully."
+
+crm_tools = [
+    search_customers,
+    update_customer,
+    add_customer,
+    delete_customer,
+]
