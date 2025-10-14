@@ -1,11 +1,11 @@
 import pandas as pd
-from langchain.tools import tool
+from smolagents import tool
 
 EMAILS = pd.read_csv("data/raw/email_addresses.csv", header=None, names=["email_address"])
 
 
-@tool("company_directory.find_email_address", return_direct=False)
-def find_email_address(name=""):
+@tool
+def find_email_address(name: str = "") -> list:
     """
     Finds the email address of an employee by their name.
     
@@ -22,3 +22,7 @@ def find_email_address(name=""):
     name = name.lower()
     email_address = EMAILS[EMAILS["email_address"].str.contains(name)]
     return email_address["email_address"].values
+
+directory_tools = [
+    find_email_address,
+]

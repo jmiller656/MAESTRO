@@ -7,3 +7,5 @@ anthropic_key.txt
 anyscale_key.txt
 downloads
 .vscode
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/

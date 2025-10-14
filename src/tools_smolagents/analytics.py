@@ -1,5 +1,5 @@
 import pandas as pd
-from langchain.tools import tool
+from smolagents import tool
 
 ANALYTICS_DATA = pd.read_csv("data/processed/analytics_data.csv", dtype=str)
 ANALYTICS_DATA["user_engaged"] = ANALYTICS_DATA["user_engaged"] == "True"  # Convert to boolean
@@ -19,8 +19,8 @@ def reset_state():
     PLOTS_DATA = pd.DataFrame(columns=["file_path"])
 
 
-@tool("analytics.get_visitor_information_by_id", return_direct=False)
-def get_visitor_information_by_id(visitor_id=None):
+@tool
+def get_visitor_information_by_id(visitor_id: str = None) -> dict:
     """
     Returns the analytics data for a given visitor ID.
     
@@ -40,8 +40,8 @@ def get_visitor_information_by_id(visitor_id=None):
         return "Visitor not found."
 
 
-@tool("analytics.create_plot", return_direct=False)
-def create_plot(time_min=None, time_max=None, value_to_plot=None, plot_type=None):
+@tool
+def create_plot(time_min: str = None, time_max: str = None, value_to_plot: str = None, plot_type: str = None) -> str:
     """
     Plots the analytics data for a given time range and value.
     
@@ -79,8 +79,8 @@ def create_plot(time_min=None, time_max=None, value_to_plot=None, plot_type=None
     return file_path
 
 
-@tool("analytics.total_visits_count", return_direct=False)
-def total_visits_count(time_min=None, time_max=None):
+@tool
+def total_visits_count(time_min: str = None, time_max: str = None) -> dict:
     """
     Returns the total number of visits within a specified time range.
     
@@ -101,8 +101,8 @@ def total_visits_count(time_min=None, time_max=None):
     return data.groupby("date_of_visit").size().to_dict()
 
 
-@tool("analytics.engaged_users_count", return_direct=False)
-def engaged_users_count(time_min=None, time_max=None):
+@tool
+def engaged_users_count(time_min: str = None, time_max: str = None) -> dict:
     """
     Returns the number of engaged users within a specified time range.
     
@@ -125,8 +125,8 @@ def engaged_users_count(time_min=None, time_max=None):
     return data.groupby("date_of_visit").sum()["user_engaged"].to_dict()
 
 
-@tool("analytics.traffic_source_count", return_direct=False)
-def traffic_source_count(time_min=None, time_max=None, traffic_source=None):
+@tool
+def traffic_source_count(time_min: str = None, time_max: str = None, traffic_source: str = None) -> dict:
     """
     Returns the number of visits from a specific traffic source within a specified time range.
     
@@ -137,7 +137,7 @@ def traffic_source_count(time_min=None, time_max=None, traffic_source=None):
     
     Examples:
     >>> analytics.traffic_source_count("2023-10-01", "2023-10-06", "search engine")
-    {{"2023-10-01": 0, "2023-10-02": 1, "2023-10-03": 0, "2023-10-04": 3, "2023-10-05": 2, "2023-10-06": 4}}
+    {"2023-10-01": 0, "2023-10-02": 1, "2023-10-03": 0, "2023-10-04": 3, "2023-10-05": 2, "2023-10-06": 4}
     """
     if time_min:
         data = ANALYTICS_DATA[ANALYTICS_DATA["date_of_visit"] >= time_min]
@@ -153,8 +153,8 @@ def traffic_source_count(time_min=None, time_max=None, traffic_source=None):
         return data.groupby("date_of_visit").size().to_dict()
 
 
-@tool("analytics.get_average_session_duration", return_direct=False)
-def get_average_session_duration(time_min=None, time_max=None):
+@tool
+def get_average_session_duration(time_min: str = None, time_max: str = None) -> dict:
     """
     Returns the average session duration within a specified time range.
     
@@ -180,3 +180,12 @@ def get_average_session_duration(time_min=None, time_max=None):
         .mean()["session_duration_seconds"]
         .to_dict()
     )
+
+analytics_tools = [
+    get_visitor_information_by_id,
+    create_plot,
+    total_visits_count,
+    engaged_users_count,
+    traffic_source_count,
+    get_average_session_duration,
+]

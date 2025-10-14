@@ -1,8 +1,7 @@
 import pandas as pd
-from langchain.tools import tool
+from smolagents import tool
 
 # Data is hard-coded so that the agent can call them without passing the dataframe as an argument.
-# We cannot use a class because LangChain does not support tools inside classes.
 CALENDAR_EVENTS = pd.read_csv("data/processed/calendar_events.csv", dtype=str)
 
 
@@ -14,8 +13,8 @@ def reset_state():
     CALENDAR_EVENTS = pd.read_csv("data/processed/calendar_events.csv", dtype=str)
 
 
-@tool("calendar.get_event_information_by_id", return_direct=False)
-def get_event_information_by_id(event_id=None, field=None):
+@tool
+def get_event_information_by_id(event_id: str = None, field: str = None) -> dict:
     """
     Returns the event for a given ID.
     
@@ -31,7 +30,7 @@ def get_event_information_by_id(event_id=None, field=None):
     {{"event_start": "2021-06-01 13:00:00"}}
 
     >>> calendar.get_event_information_by_id("00000000", "duration")
-    {{"duration": "60"}}
+    {"duration": "60"}
     """
     if not event_id:
         return "Event ID not provided."
@@ -47,8 +46,8 @@ def get_event_information_by_id(event_id=None, field=None):
         return "Event not found."
 
 
-@tool("calendar.search_events", return_direct=False)
-def search_events(query="", time_min=None, time_max=None):
+@tool
+def search_events(query: str = "", time_min: str = None, time_max: str = None) -> list:
     """
     Returns the events for a given query.
     
@@ -77,8 +76,8 @@ def search_events(query="", time_min=None, time_max=None):
         return "No events found."
 
 
-@tool("calendar.create_event", return_direct=False)
-def create_event(event_name=None, participant_email=None, event_start=None, duration=None):
+@tool
+def create_event(event_name: str = None, participant_email: str = None, event_start: str = None, duration: str = None) -> str:
     """
     Creates a new event.
     
@@ -92,7 +91,6 @@ def create_event(event_name=None, participant_email=None, event_start=None, dura
     >>> calendar.create_event("Meeting with Sam", "sam@example.com", "2021-06-01 13:00:00", "60")
     "00000000"
     """
-    # Working with classes is difficult in LangChain, so we use a global variable instead.
     global CALENDAR_EVENTS
 
     if not event_name:
@@ -120,8 +118,8 @@ def create_event(event_name=None, participant_email=None, event_start=None, dura
     return event_id
 
 
-@tool("calendar.delete_event", return_direct=False)
-def delete_event(event_id=None):
+@tool
+def delete_event(event_id: str = None) -> str:
     """
     Deletes an event.
     
@@ -144,8 +142,8 @@ def delete_event(event_id=None):
         return "Event not found."
 
 
-@tool("calendar.update_event", return_direct=False)
-def update_event(event_id=None, field=None, new_value=None):
+@tool
+def update_event(event_id: str = None, field: str = None, new_value: str = None) -> str:
     """
     Updates an event.
     
@@ -169,3 +167,11 @@ def update_event(event_id=None, field=None, new_value=None):
         return "Event updated successfully."
     else:
         return "Event not found."
+
+calendar_tools = [
+    get_event_information_by_id,
+    search_events,
+    create_event,
+    delete_event,
+    update_event,
+]
