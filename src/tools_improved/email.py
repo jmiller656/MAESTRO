@@ -70,38 +70,50 @@ def search_emails(query="", date_min=None, date_max=None):
     Searches for emails containing all specified keywords across subject, body, and sender fields.
 
     Purpose:
-    Finds emails that match your search criteria by checking if all words in your query
-    appear anywhere in the email's subject, body, or sender fields. Results are sorted
-    by most recent first and limited to 5 emails.
+    Finds emails that match your search criteria. **This tool *always* sorts results
+    by the most recent date, so the first result (index 0) in the list is always
+    the 'latest' or 'most recent' one matching the query.**
+    
+    This tool is the crucial first step for any action that requires an `email_id`
+    (e.g., deleting, replying, forwarding). You MUST use this tool to get the
+    `email_id` *before* calling `delete_email`, `reply_email`, or `forward_email`.
 
     Usage Examples:
     search_emails("Project Update")
     > Returns emails containing both "Project" AND "Update"
     
-    search_emails("meeting budget", date_min="2024-01-01", date_max="2024-01-31")
-    > Returns January 2024 emails containing both "meeting" AND "budget"
+    **search_emails("nadia")**
+    **> Returns all emails from/to/about 'nadia', sorted by most recent first.**
     
-    search_emails(query="", date_min="2024-01-15")
-    > Returns all emails sent on or after January 15, 2024
+    **search_emails("nadia budget")**
+    **> Returns emails containing 'nadia' AND 'budget', sorted by most recent first.**
+    
+    search_emails("meeting", date_min="2024-01-01", date_max="2024-01-31")
+    > Returns January 2024 emails containing "meeting"
 
     Limitations:
     - Returns maximum of 5 most recent matching emails
     - Requires ALL words in query to be present (AND logic, not OR)
-    - Case-insensitive matching only
-    - No support for phrase matching or advanced search operators
-    - Date filters are inclusive (includes boundary dates)
+    - **CRITICAL: If there are no matches, this tool returns the literal string "No emails found.", NOT an empty list. You MUST check for this string before attempting to iterate or access email IDs.**
+    - **CRITICAL: Do NOT use search operators (e.g., `from:john`, `to:susie`). These will fail.**
 
     Args:
-    query (str): Space-separated keywords to search for. All words must appear in
-                 the email's subject, body, or sender field
-    date_min (str): Earliest sent date to include (format: "YYYY-MM-DD"). Inclusive
-    date_max (str): Latest sent date to include (format: "YYYY-MM-DD"). Inclusive
+    query (str): Space-separated keywords to search for.
+                 **To find an email from a person *about* a topic, include both
+                 (e.g., `query='yuki budget'`).**
+    date_min (str): Earliest sent date (format: "YYYY-MM-DD"). **Only use this if the
+                 user *specifically* requests a time range (e.g., 'last week',
+                 'from the last 5 days'). Do NOT use this for general 'latest'
+                 or 'most recent' queries.**
+    date_max (str): Latest sent date (format: "YYYY-MM-DD"). **Only use this if the
+                 user *specifically* requests a time range. Do NOT use this
+                 for general 'latest' or 'most recent' queries.**
 
     Returns:
-    list: Up to 5 email dictionaries sorted by sent_datetime (most recent first),
+    list: If there are any matches, up to 5 email dictionaries sorted by sent_datetime (most recent first),
           each containing: email_id, inbox/outbox, subject, sender/recipient,
-          sent_datetime, body, or
-    str: "No emails found." if no matches exist
+          sent_datetime, body.
+    str: **IMPORTANT: If there are no matches, this returns the literal string "No emails found.", NOT an empty list.**
     """
 
     query_words = query.lower().split()
@@ -136,14 +148,10 @@ def send_email(recipient=None, subject=None, body=None):
 
     Purpose:
     Creates and sends an email from the user's outbox with the provided subject line
-    and message body. The email is timestamped with the current time and assigned
-    a unique email ID for future reference.
+    and message body.
 
     Usage Examples:
     send_email("jane@example.com", "Meeting Reminder", "Don't forget our meeting at 10am tomorrow.")
-    > Returns: "Email sent successfully."
-    
-    send_email("team@company.com", "Weekly Update", "Here are this week's highlights...")
     > Returns: "Email sent successfully."
     
     send_email("invalid-email", "Test", "This will fail")
@@ -151,16 +159,17 @@ def send_email(recipient=None, subject=None, body=None):
 
     Limitations:
     - Requires all three parameters (recipient, subject, body)
-    - Validates email format but doesn't verify if address exists
     - No support for CC, BCC, or attachments
-    - Cannot schedule emails for future delivery
-    - Automatically converts recipient email to lowercase
+    - **CRITICAL: This tool requires a *full email address* (e.g., 'dmitri.ivanov@atlas.com'). It cannot accept just a name (e.g., 'dmitri').**
 
     Args:
     recipient (str): Email address of the person receiving the message.
-                     Must contain "@" and "." to pass validation
+                     Must contain "@" and "." to pass validation.
+                     **If you are given only a name (e.g., "dmitri"), you MUST use the `company_directory.find_email_address` tool first to find their full email address.**
     subject (str): Subject line that appears in the email header
-    body (str): Main content/message of the email
+    body (str): Main content/message of the email. **CRITICAL: Only include the text
+                 of the email message itself.** Do NOT include conversational parts
+                 of the user's request (e.g., 'Can you send this for me?').
 
     Returns:
     str: "Email sent successfully." if all parameters are valid and email is created, or
@@ -194,7 +203,8 @@ def delete_email(email_id=None):
 
     Purpose:
     Deletes a specific email from the user's email storage using its unique identifier.
-    This action is permanent and cannot be undone.
+    This action is permanent and cannot be undone. **You MUST use `search_emails` first
+    to find the `email_id` of the email you want to delete.**
 
     Usage Examples:
     delete_email("12345678")
@@ -202,15 +212,16 @@ def delete_email(email_id=None):
     
     delete_email("99999999")
     > Returns: "Email not found."
-    
-    delete_email("")
-    > Returns: "Email ID not provided."
 
     Limitations:
     - Deletion is permanent with no recovery option
     - Requires exact email_id match
-    - No bulk delete capability (one email at a time)
-    - No confirmation prompt before deletion
+    - **CRITICAL: This tool deletes only *one* email per call. If `search_emails` returns
+      a list of multiple emails to be deleted (e.g., 'delete all emails from...'),
+      you **MUST call `delete_email` repeatedly**, once for *each* `email_id` in the
+      search results list.**
+    - **CRITICAL: The `email_id` must be a valid ID (a string of numbers) obtained
+      from `search_emails`. Do NOT pass the string "No emails found." to this tool.**
 
     Args:
     email_id (str): The unique identifier of the email to permanently delete
@@ -237,31 +248,37 @@ def forward_email(email_id=None, recipient=None):
     Forwards an existing email to a new recipient with "FW:" prefix in subject.
 
     Purpose:
-    Sends a copy of an existing email to a different recipient, preserving the original
-    body content and adding "FW:" to the beginning of the subject line to indicate
-    it's a forwarded message.
+    Sends a copy of an existing email to a different recipient.
+    **You MUST use `search_emails` first to find the `email_id` of the email
+    you want to forward.** To find the correct email, search for *all* keywords
+    (e.g., sender and subject: `query='yuki appreciation gala'`).
 
     Usage Examples:
     forward_email("12345678", "jane@example.com")
     > Returns: "Email forwarded successfully."
-    
-    forward_email("12345678", "team@company.com")
-    → Sends email with subject "FW: [original subject]"
     
     forward_email("invalid_id", "jane@example.com")
     > Returns: "Email not found."
 
     Limitations:
     - Cannot add additional message to the forwarded content
-    - No support for forwarding to multiple recipients at once
-    - Validates email format but doesn't verify if address exists
-    - Automatically converts recipient email to lowercase
-    - Requires both email_id and recipient
+    - No support for forwarding to multiple recipients at once in a single call
+    - **CRITICAL: This tool forwards only *one* email per call. If `search_emails`
+      returns a list of multiple emails to be forwarded (e.g., 'forward all emails
+      about X'), you **MUST call `forward_email` repeatedly**, once for *each*
+      `email_id` in the search results list.**
+    - **CRITICAL: The `email_id` must be a valid ID obtained from `search_emails`.
+      Do NOT pass the string "No emails found." to this tool.**
+    - **CRITICAL: This tool requires a *full email address* (e.g., 'yuki.tanaka@atlas.com')
+      for the `recipient`. It cannot accept just a name (e.g., 'yuki').**
 
     Args:
     email_id (str): The unique identifier of the email to forward
     recipient (str): Email address of the person to receive the forwarded email.
-                     Must contain "@" and "." to pass validation
+                     Must contain "@" and "." to pass validation.
+                     **If you are given only a name (e.g., "yuki"), you MUST use the
+                     `company_directory.find_email_address` tool first to find their
+                     full email address.**
 
     Returns:
     str: "Email forwarded successfully." if the operation completes, or
@@ -287,15 +304,13 @@ def reply_email(email_id=None, body=None):
     Sends a reply to an existing email, addressing the original sender.
 
     Purpose:
-    Responds to an email by automatically sending your reply to the original sender
-    while keeping the same subject line. The recipient is determined from the
-    original email's sender/recipient field.
+    Responds to an email by automatically sending your reply to the original sender.
+    **You MUST use `search_emails` first to find the `email_id` of the email
+    you want to reply to.** To find the correct email, search for *all* keywords
+    (e.g., sender and subject: `query='yuki appreciation gala'`).
 
     Usage Examples:
     reply_email("12345678", "Thank you for the update.")
-    → Sends reply to original sender with your message
-    
-    reply_email("12345678", "I'll review this and get back to you by Friday.")
     > Returns: "Email replied successfully."
     
     reply_email("invalid_id", "Thanks!")
@@ -304,13 +319,14 @@ def reply_email(email_id=None, body=None):
     Limitations:
     - Cannot modify the subject line (uses original subject)
     - Only replies to the direct sender (no "Reply All" functionality)
-    - Requires both email_id and body content
-    - No support for adding attachments
-    - Does not quote original message in reply
+    - **CRITICAL: The `email_id` must be a valid ID (a string of numbers) obtained
+      from `search_emails`. Do NOT pass the string "No emails found." to this tool.**
 
     Args:
     email_id (str): The unique identifier of the email being replied to
-    body (str): Your reply message content
+    body (str): Your reply message content. **CRITICAL: Only include the text
+                 of the reply itself.** Do NOT include conversational phrases from
+                 the user's request (e.g., 'Can you send...').
 
     Returns:
     str: "Email replied successfully." if the reply is sent, or

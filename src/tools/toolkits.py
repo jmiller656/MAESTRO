@@ -52,3 +52,9 @@ customer_relationship_manager_toolkit = [
     t["tool"] for t in tool_information if t["name"].split(".")[0] == "customer_relationship_manager"
 ]
 company_directory_toolkit = [t["tool"] for t in tool_information if t["name"].split(".")[0] == "company_directory"]
+
+domains = [calendar, email, analytics, project_management, customer_relationship_manager]
+
+def reset_all():
+    for domain in domains:
+        domain.reset_state()

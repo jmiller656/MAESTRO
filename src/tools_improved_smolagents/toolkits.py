@@ -73,3 +73,9 @@ tools_without_side_effects = [
 ]
 
 all_tools = tools_with_side_effects + tools_without_side_effects
+
+domains = [calendar, email, analytics, project_management, customer_relationship_manager]
+
+def reset_all():
+    for domain in domains:
+        domain.reset_state()

@@ -5,6 +5,9 @@ import sys
 import os
 import ast
 
+from freezegun import freeze_time
+freeze_time("2023-11-30")
+
 project_root = os.path.abspath(os.path.curdir)
 sys.path.append(project_root)
 

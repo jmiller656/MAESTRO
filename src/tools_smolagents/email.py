@@ -83,6 +83,39 @@ def search_emails(query: str = "", date_min: str = None, date_max: str = None) -
         return emails[:5]
     else:
         return "No emails found."
+    
+def non_tool_send(recipient: str = None, subject: str = None, body: str = None) -> str:
+    """
+    Sends an email to the specified recipient.
+    
+    Args:
+        recipient: Email address of the recipient.
+        subject: Subject line of the email.
+        body: Body content of the email.
+    
+    Examples:
+    >>> email.send_email("jane@example.com", "Meeting Reminder", "Don't forget our meeting at 10am tomorrow.")
+    "Email sent successfully."
+    """
+    global EMAILS
+    if not recipient or not subject or not body:
+        return "Recipient, subject, or body not provided."
+    if "@" not in recipient or "." not in recipient:
+        return "Invalid recipient email address."
+    recipient = recipient.lower()
+
+    email_id = str(int(EMAILS["email_id"].max()) + 1)
+    sent_datetime = HARDCODED_CURRENT_TIME
+    EMAILS.loc[len(EMAILS)] = [
+        email_id,
+        "outbox",
+        recipient,
+        subject,
+        sent_datetime,
+        body,
+    ]
+
+    return "Email sent successfully."
 
 @tool
 def send_email(recipient: str = None, subject: str = None, body: str = None) -> str:
@@ -163,7 +196,7 @@ def forward_email(email_id: str = None, recipient: str = None) -> str:
         return "Invalid recipient email address."
     recipient = recipient.lower()
     email = EMAILS[EMAILS["email_id"] == email_id].to_dict(orient="records")[0]
-    result = send_email.func(recipient, f"FW: {email['subject']}", email["body"])
+    result = non_tool_send(recipient, f"FW: {email['subject']}", email["body"])
     return "Email forwarded successfully." if result == "Email sent successfully." else result
 
 @tool
@@ -185,7 +218,7 @@ def reply_email(email_id: str = None, body: str = None) -> str:
     if email_id not in EMAILS["email_id"].values:
         return "Email not found."
     email = EMAILS[EMAILS["email_id"] == email_id].to_dict(orient="records")[0]
-    result = send_email.func(email["sender/recipient"], f"{email['subject']}", body)
+    result = non_tool_send(email["sender/recipient"], f"{email['subject']}", body)
     return "Email replied successfully." if result == "Email sent successfully." else result
 
 email_tools = [

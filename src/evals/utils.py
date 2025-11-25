@@ -19,6 +19,7 @@ from src.tools.toolkits import (
     customer_relationship_manager_toolkit,
     company_directory_toolkit,
     tools_with_side_effects,
+    reset_all as reset_all_original
 )
 
 from src.tools_smolagents.toolkits import (
@@ -29,7 +30,8 @@ from src.tools_smolagents.toolkits import (
     customer_relationship_manager_toolkit as smol_customer_relationship_manager_toolkit,
     company_directory_toolkit as smol_company_directory_toolkit,
     tools_with_side_effects as smol_tools_with_side_effects,
-    GLOBAL_TOOL_TRACKER
+    GLOBAL_TOOL_TRACKER,
+    reset_all as reset_all_smol,
 )
 
 from src.tools_improved.toolkits import (
@@ -38,7 +40,8 @@ from src.tools_improved.toolkits import (
     project_management_toolkit as project_management_toolkit_improved,
     customer_relationship_manager_toolkit as customer_relationship_manager_toolkit_improved,
     company_directory_toolkit as company_directory_toolkit_improved,
-    tools_with_side_effects as tools_with_side_effects_improved
+    tools_with_side_effects as tools_with_side_effects_improved,
+    reset_all as reset_all_improved
 )
 
 from src.tools_improved_smolagents.toolkits import (
@@ -49,11 +52,11 @@ from src.tools_improved_smolagents.toolkits import (
     customer_relationship_manager_toolkit as smol_customer_relationship_manager_toolkit_improved,
     company_directory_toolkit as smol_company_directory_toolkit_improved,
     tools_with_side_effects as smol_tools_with_side_effects_improved,
+    reset_all as reset_all_improved_smol
 )
 
 from tqdm.auto import tqdm
 
-# Import for SmolAgents (only if requested, to avoid import errors when not needed)
 smolagents = None
 try:
     from smolagents import CodeAgent
@@ -72,6 +75,11 @@ AVAILABLE_LLMS = [
     "qwen-2.5-7b"
 ]
 
+def reset_all():
+    reset_all_original()
+    reset_all_smol()
+    reset_all_improved()
+    reset_all_improved_smol()
 
 def convert_agent_action_to_function_call(action):
     """Converts langchain_core.agents.AgentAction to an API call"""
@@ -111,6 +119,7 @@ def execute_actions_and_reset_state(actions):
     new_analytics_state pd.DataFrame
         The resulting analytics data after executing the actions.
     """
+    reset_all()
     for domain in DOMAINS:
         domain.reset_state()
 
@@ -126,6 +135,7 @@ def execute_actions_and_reset_state(actions):
     new_project_management_state = project_management.PROJECT_TASKS.copy()
     new_customer_relationship_manager_state = customer_relationship_manager.CRM_DATA.copy()
 
+    reset_all()
     # Reset the state of the tools
     for domain in DOMAINS:
         domain.reset_state()
@@ -320,6 +330,7 @@ def has_side_effects(predicted_actions, ground_truth_actions):
         True if the predicted actions result in different state change than the ground truth actions.
 
     """
+    reset_all()
     for domain in DOMAINS:
         domain.reset_state()
     original_state = {
@@ -773,6 +784,8 @@ def generate_results(queries_path, model_name, tool_selection="all", num_retrys=
     tools = get_toolkits(toolkits, tool_set=actual_tool_set)
 
     for i, query in tqdm(list(enumerate(queries))):
+        reset_all()
+
         if tool_selection == "domains":
             toolkits = queries_df["domains"].iloc[i].strip("][").replace("'", "").split(", ")
             tools = get_toolkits(toolkits, tool_set=actual_tool_set)
@@ -780,50 +793,47 @@ def generate_results(queries_path, model_name, tool_selection="all", num_retrys=
         if agent_engine == "smolagents":
             # Initialize the appropriate model based on model_name
             if model_name.startswith("gpt"):
-                model = LiteLLMModel(model_id=model_name, api_key=OPENAI_KEY)
+                model = LiteLLMModel(model_id=model_name, api_key=OPENAI_KEY, temperature=0.7)
             elif model_name == "llama3.3-70b":
                 OPENROUTER_KEY = open("openrouter_key.txt", "r").read()
                 model = LiteLLMModel(
                     model_id="openrouter/meta-llama/llama-3.3-70b-instruct",
                     api_key = OPENROUTER_KEY,
-                    temperature=0,
+                    temperature=0.7,
                 )
             elif model_name == "llama3.1-8b":
                 OPENROUTER_KEY = open("openrouter_key.txt", "r").read()
                 model = LiteLLMModel(
                     model_id="openrouter/meta-llama/llama-3.1-8b-instruct",
                     api_key = OPENROUTER_KEY,
-                    temperature=0,
+                    temperature=0.7,
                 )
             elif model_name == "qwen-2.5-72b":
                 OPENROUTER_KEY = open("openrouter_key.txt", "r").read()
                 model = LiteLLMModel(
                     model_id="openrouter/qwen/qwen-2.5-72b-instruct",
                     api_key = OPENROUTER_KEY,
-                    temperature=0,
+                    temperature=0.7,
                 )
             elif model_name == "qwen-2.5-7b":
                 OPENROUTER_KEY = open("openrouter_key.txt", "r").read()
                 model = LiteLLMModel(
                     model_id="openrouter/qwen/qwen-2.5-7b-instruct",
                     api_key = OPENROUTER_KEY,
-                    temperature=0,
+                    temperature=0.7,
                 )
             
             GLOBAL_TOOL_TRACKER.clear()
+            reset_all()
 
             # Create the SmolAgents agent
-
-            print(model_name)
-            print(model)
-
             agent = CodeAgent(
                 tools=tools,
                 model=model,
             )
 
             prompt_template = (
-                f"Today's date is {HARDCODED_CURRENT_TIME.strftime('%A')}, {HARDCODED_CURRENT_TIME.date()} and the current time is {HARDCODED_CURRENT_TIME.time()}. Remember the current date and time when answering queries. Meetings must not start before 9am or end after 6pm."
+                f"Today's date is {HARDCODED_CURRENT_TIME.strftime('%A')}, {HARDCODED_CURRENT_TIME.date()} and the current time is {HARDCODED_CURRENT_TIME.time()}. Remember the current date and time when answering queries. You must not schedule meetings that start before 9am or end after 6pm"
             )
 
             error = ""
@@ -917,6 +927,7 @@ def generate_results(queries_path, model_name, tool_selection="all", num_retrys=
             ignore_index=True,
         )
         # Reset all data after each query
+        reset_all()
         for domain in DOMAINS:
             domain.reset_state()
 

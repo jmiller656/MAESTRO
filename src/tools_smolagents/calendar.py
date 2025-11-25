@@ -16,21 +16,25 @@ def reset_state():
 @tool
 def get_event_information_by_id(event_id: str = None, field: str = None) -> dict:
     """
-    Returns the event for a given ID.
-    
-    Args:
-        event_id: 8-digit ID of the event.
-        field: Field to return. Available fields are: "event_id", "event_name", "participant_email", "event_start", "duration"
-    
+    Retrieves a specific field value (e.g., name, start time) from an event using its 8-digit ID.
+
+    Usage Scenarios:
+    - Use when you have an `event_id` and need to know a *single piece* of information about it.
+    - Use to get the 'event_name', 'participant_email', 'event_start', or 'duration' of a known event.
+
     Examples:
     >>> calendar.get_event_information_by_id("00000000", "event_name")
     {{"event_name": "Meeting with Sam"}}
-
     >>> calendar.get_event_information_by_id("00000000", "event_start")
     {{"event_start": "2021-06-01 13:00:00"}}
 
-    >>> calendar.get_event_information_by_id("00000000", "duration")
-    {"duration": "60"}
+    Args:
+    event_id (str): The 8-digit unique ID for the event (e.g., "00000123"). (Required)
+    field (str): The specific field to retrieve. Must be one of: "event_id", "event_name", 
+                 "participant_email", "event_start", "duration". (Required)
+
+    Returns:
+    dict: A dictionary with the requested field and its value, or an error string.
     """
     if not event_id:
         return "Event ID not provided."
@@ -49,18 +53,27 @@ def get_event_information_by_id(event_id: str = None, field: str = None) -> dict
 @tool
 def search_events(query: str = "", time_min: str = None, time_max: str = None) -> list:
     """
-    Returns the events for a given query.
-    
-    Args:
-        query: Query to search for. Terms will be matched in the event_name and participant_email fields.
-        time_min: Lower bound (inclusive) for an event's end time to filter by. Format: "YYYY-MM-DD HH:MM:SS"
-        time_max: Upper bound (inclusive) for an event's start time to filter by. Format: "YYYY-MM-DD HH:MM:SS
-    
+    Searches for events by keyword and/or time range. Returns a list of up to 5 matching events.
+
+    Usage Scenarios:
+    - Use when you *do not* know the `event_id`.
+    - Use to find all meetings with a specific person (e.g., "Sam" or "sam@example.com").
+    - Use to find all events on a specific day (e.g., by setting `time_min` and `time_max` to the start and end of the day).
+    - Use to find an event with a keyword (e.g., "Meeting").
+
     Examples:
     >>> calendar.search_events("Sam")
-    [{{"event_id": "00000000", "event_name": "Meeting with Sam", "participant_email: "sam@example.com", "event_start": "2021-06-01 13:00:00", "duration": "60"}},
-    {{"event_id": "00000001", "event_name": "Lunch with Sam", "participant_email": "sam@example.com", "event_start": "2021-06-01 13:00:00", "duration": "30"}}
-    ]
+    [{{"event_id": "00000000", ...}}]
+    >>> calendar.search_events(time_min="2021-06-01 00:00:00", time_max="2021-06-01 23:59:59")
+    [...all events on June 1st...]
+
+    Args:
+    query (str): Text to search in event names and participant emails. (Optional)
+    time_min (str): The *earliest* event start time. Format: "YYYY-MM-DD HH:MM:SS". (Optional)
+    time_max (str): The *latest* event start time. Format: "YYYY-MM-DD HH:MM:SS". (Optional)
+
+    Returns:
+    list: A list of up to 5 event dictionaries, or the string "No events found."
     """
     events = CALENDAR_EVENTS[
         (CALENDAR_EVENTS["event_name"].str.contains(query, case=False))
@@ -79,17 +92,24 @@ def search_events(query: str = "", time_min: str = None, time_max: str = None) -
 @tool
 def create_event(event_name: str = None, participant_email: str = None, event_start: str = None, duration: str = None) -> str:
     """
-    Creates a new event.
-    
-    Args:
-        event_name: Name of the event.
-        participant_email: Email of the participant.
-        event_start: Start time of the event. Format: "YYYY-MM-DD HH:MM:SS"
-        duration: Duration of the event in minutes.
-    
+    Creates a new event with the specified details and returns its 8-digit event_id.
+
+    Usage Scenarios:
+    - Use to add a new event to the calendar.
+    - Use when a user asks to 'schedule', 'book', or 'add' a meeting or event.
+
     Examples:
     >>> calendar.create_event("Meeting with Sam", "sam@example.com", "2021-06-01 13:00:00", "60")
-    "00000000"
+    "00000123"
+
+    Args:
+    event_name (str): Title of the event (e.g., "Meeting with Sam"). (Required)
+    participant_email (str): Email of the participant (e.g., "sam@example.com"). (Required)
+    event_start (str): Start time. Format: "YYYY-MM-DD HH:MM:SS". (Required)
+    duration (str): Duration in *minutes* (e.g., "60" for 1 hour). (Required)
+
+    Returns:
+    str: The 8-digit unique identifier (event_id) for the new event, or an error string.
     """
     global CALENDAR_EVENTS
 
@@ -121,14 +141,21 @@ def create_event(event_name: str = None, participant_email: str = None, event_st
 @tool
 def delete_event(event_id: str = None) -> str:
     """
-    Deletes an event.
-    
-    Args:
-        event_id: 8-digit ID of the event.
-    
+    Permanently deletes an event using its 8-digit event_id.
+
+    Usage Scenarios:
+    - Use when a user asks to 'delete', 'cancel', or 'remove' a specific event.
+    - This tool requires an `event_id`. If you don't have it, use `search_events` first to find it.
+
     Examples:
-    >>> calendar.delete_event("00000000")
+    >>> calendar.delete_event("00000123")
     "Event deleted successfully."
+
+    Args:
+    event_id (str): The 8-digit unique ID of the event to delete (e.g., "00000123"). (Required)
+
+    Returns:
+    str: "Event deleted successfully." or an error string ("Event not found.").
     """
     global CALENDAR_EVENTS
 
@@ -145,16 +172,28 @@ def delete_event(event_id: str = None) -> str:
 @tool
 def update_event(event_id: str = None, field: str = None, new_value: str = None) -> str:
     """
-    Updates an event.
-    
-    Args:
-        event_id: 8-digit ID of the event.
-        field: Field to update.
-        new_value: New value for the field.
-    
+    Updates a *single field* of an existing event using its 8-digit event_id.
+
+    Usage Scenarios:
+    - Use to 'reschedule', 'rename', 'change', or 'move' an event.
+    - Use to change the event name, start time, duration, or participant.
+    - Note: Can only update one field at a time. Multiple changes require multiple calls.
+    - This tool requires an `event_id`. If you don't have it, use `search_events` first.
+
     Examples:
     >>> calendar.update_event("00000000", "event_name", "New Event Name")
     "Event updated successfully."
+    >>> calendar.update_event("00000000", "event_start", "2021-06-02 14:00:00")
+    "Event updated successfully."
+
+    Args:
+    event_id (str): The 8-digit unique ID of the event to update. (Required)
+    field (str): The field to change. Must be one of: "event_name", "participant_email", 
+                 "event_start", "duration". (Required)
+    new_value (str): The new value for the field. (Required)
+
+    Returns:
+    str: "Event updated successfully." or an error string.
     """
     global CALENDAR_EVENTS
 
