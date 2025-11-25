@@ -19,9 +19,10 @@ def get_task_information_by_id(task_id: str = None, field: str = None) -> dict:
     Retrieves a specific field value from a task using its unique identifier.
 
     Purpose:
-    Fetches individual task attributes by task ID. Use this when you need to get one specific 
-    piece of information about a task you've already identified, rather than searching for tasks 
-    or retrieving full task details.
+    Fetches a single piece of information (like 'due_date' or 'list_name') from one
+    specific task using its known task_id. Use this for checking a specific detail
+    about a task you've already identified. This tool does not search for tasks. To
+    find tasks based on criteria (like assignee or status), use search_tasks.
 
     Usage Examples:
     get_task_information_by_id("00000042", "task_name")
@@ -38,6 +39,7 @@ def get_task_information_by_id(task_id: str = None, field: str = None) -> dict:
     - Requires exact task_id match (case-sensitive, 8 digits)
     - Returns error message if task_id doesn't exist
     - Cannot retrieve task_id field itself (redundant)
+    - Cannot be used to find tasks. It only retrieves data if the task_id is already known.
 
     Args:
     task_id (str): 8-digit unique task identifier (e.g., "00000042")
@@ -71,7 +73,9 @@ def search_tasks(task_name: str = None, assigned_to_email: str = None, list_name
     Finds all tasks that match your search criteria. Use this to discover tasks when you don't 
     know the task_id, to filter tasks by assignee, status, deadline, or other attributes, or to 
     get a list of tasks meeting multiple conditions. All searches are case-insensitive and support 
-    partial matches.
+    partial matches. CRITICAL: This is the primary tool to find task_ids based on user
+    criteria. The list of tasks returned (with their task_ids) is required to use
+    update_task or delete_task in subsequent steps.
 
     Usage Examples:
     search_tasks(task_name="API")
@@ -90,14 +94,26 @@ def search_tasks(task_name: str = None, assigned_to_email: str = None, list_name
     - Returns empty list if no tasks match criteria
     - Requires at least one search parameter
     - Partial text matches may return more results than expected
-    - Does not sort results (returned in arbitrary order)
+    - Does not sort results (returned in arbitrary order). It cannot find the 'most urgent'
+      or 'newest' task.
     - Cannot use logical operators (AND/OR) between different field values
+    - Cannot perform date-based comparisons (e.g., 'before today'). The due_date search
+      is a simple text 'contains' match.
+    - To act on the results (e.g., update or delete), you must call update_task or
+      delete_task for each task_id returned by this search.
 
     Args:
     task_name (str, optional): Full or partial task name (case-insensitive)
     assigned_to_email (str, optional): Full or partial email address (case-insensitive)
-    list_name (str, optional): Full or partial list name (case-insensitive)
-    due_date (str, optional): Full or partial date in "YYYY-MM-DD" format
+    list_name (str, optional): Full or partial list name. Common values are 'Backlog'
+                 (tasks not started), 'In Progress', 'In Review', 'Completed'. A request
+                 for 'unfinished' tasks typically means searching for 'Backlog',
+                 'In Progress', AND 'In Review'.
+    due_date (str, optional): Full or partial date string (e.g., '2023-11' or '2023-11-15').
+                 This is a simple text match, NOT a date comparison. It cannot
+                 automatically find 'overdue' tasks (e.g., 'date < today'). To find
+                 'overdue' tasks, you must search using a specific date string
+                 (e.g., a past month like '2023-10').
     board (str, optional): Full or partial board name (case-insensitive)
 
     Returns:
@@ -129,7 +145,9 @@ def create_task(task_name: str = None, assigned_to_email: str = None, list_name:
     Purpose:
     Adds a new task to the project management system. Use this when planning new work, 
     assigning responsibilities, or tracking new deliverables. The system automatically assigns 
-    a unique 8-digit task_id that can be used to reference this task in other operations.
+    a unique 8-digit task_id. IMPORTANT: If given a person's name (e.g., 'Fatima'),
+    you MUST use the company_directory.find_email_address tool first to get their full
+    email address before calling this tool.
 
     Usage Examples:
     create_task(
@@ -152,7 +170,8 @@ def create_task(task_name: str = None, assigned_to_email: str = None, list_name:
 
     Limitations:
     - All five parameters are required; missing any will result in error
-    - assigned_to_email must match an existing team member email
+    - assigned_to_email must match an existing team member email. You MUST use the
+      company_directory.find_email_address tool to get the correct email from a name.
     - list_name must be exactly one of: "Backlog", "In Progress", "In Review", "Completed"
     - board must be exactly one of: "Back end", "Front end", "Design"
     - due_date must be in "YYYY-MM-DD" format (not validated for actual date)
@@ -161,8 +180,13 @@ def create_task(task_name: str = None, assigned_to_email: str = None, list_name:
 
     Args:
     task_name (str): Descriptive name for the task
-    assigned_to_email (str): Email address of team member (must exist in system)
-    list_name (str): Task status - must be "Backlog", "In Progress", "In Review", or "Completed"
+    assigned_to_email (str): CRITICAL: Must be a full, valid email address. If you
+                 only have a name (e.g., 'Carlos'), you MUST use the
+                 company_directory.find_email_address tool to find the correct
+                 email BEFORE calling create_task. Do not guess
+                 (e.g., 'carlos@example.com').
+    list_name (str): Task status. 'Backlog' is the default for new, unstarted tasks.
+                 Must be exactly: "Backlog", "In Progress", "In Review", or "Completed".
     due_date (str): Deadline in "YYYY-MM-DD" format
     board (str): Project board - must be "Back end", "Front end", or "Design"
 
@@ -204,9 +228,11 @@ def delete_task(task_id: str = None) -> str:
     Permanently removes a task from the system by its unique identifier.
 
     Purpose:
-    Deletes tasks that are no longer needed, were created in error, or are obsolete. Use this 
-    to clean up the task list and remove cancelled work. This operation is permanent and cannot 
-    be undone within the system.
+    Deletes tasks that are no longer needed. This operation is permanent and cannot 
+    be undone. IMPORTANT: This tool requires an exact task_id. To delete tasks
+    based on criteria (e.g., 'delete all of Carlos's completed tasks'), you must
+    first use search_tasks to find their task_ids, and then call this tool for each
+    task_id.
 
     Usage Examples:
     delete_task("00000042")
@@ -221,7 +247,7 @@ def delete_task(task_id: str = None) -> str:
     - Does not archive or create deletion history
     - Does not warn about deleting tasks with dependencies
     - Cannot bulk delete multiple tasks at once
-    - Cannot delete based on criteria (must use task_id)
+    - Cannot delete based on criteria (must use task_id); use search_tasks first to find the IDs.
 
     Args:
     task_id (str): 8-digit unique identifier of the task to delete (e.g., "00000042")
@@ -249,9 +275,11 @@ def update_task(task_id: str = None, field: str = None, new_value: str = None) -
     Modifies a single field of an existing task identified by its task ID.
 
     Purpose:
-    Updates task details as work progresses or requirements change. Use this to reassign tasks, 
-    update status, change deadlines, modify task names, or move tasks between boards. Updates 
-    one field at a time with validation for field-specific constraints.
+    Updates task details. Use this to reassign tasks, update status (e.g., move list),
+    change deadlines, etc. CRITICAL: This tool operates on a SINGLE task using its
+    exact task_id. To update multiple tasks (e.g., 'move all of Carlos's tasks'),
+    you must first call search_tasks to get the list of task_ids, and then call
+    update_task repeatedly, once for each task_id.
 
     Usage Examples:
     update_task("00000042", "list_name", "In Review")
@@ -267,10 +295,13 @@ def update_task(task_id: str = None, field: str = None, new_value: str = None) -
     > Returns: "Task updated successfully." (moves to different board)
 
     Limitations:
-    - Updates only one field per call; multiple updates require multiple calls
+    - Updates only one field per call. Bulk updates (e.g., 'move all tasks')
+      require calling search_tasks first, then calling this tool multiple times
+      (once per task_id).
     - Cannot update task_id field itself (immutable identifier)
-    - assigned_to_email must match existing team member
-    - list_name must be exactly: "Backlog", "In Progress", "In Review", or "Completed"
+    - assigned_to_email must match existing team member. You MUST use the
+      company_directory.find_email_address tool first if you only have a name.
+    - list_name must be exactly: "Backlog", "In Progress", "In Review", "Completed"
     - board must be exactly: "Back end", "Front end", or "Design"
     - No validation for due_date format or logical validity
     - No change history or audit trail maintained
@@ -279,8 +310,12 @@ def update_task(task_id: str = None, field: str = None, new_value: str = None) -
     Args:
     task_id (str): 8-digit unique task identifier (e.g., "00000042")
     field (str): Field to modify - must be "task_name", "assigned_to_email", "list_name", 
-                 "due_date", or "board"
-    new_value (str): New value for the specified field (validated based on field type)
+                 "due_date", or "board". If updating assigned_to_email and you only
+                 have a name (e.g., 'Kofi'), you MUST use the
+                 company_directory.find_email_address tool to find the correct
+                 email BEFORE calling this tool.
+    new_value (str): New value for the specified field. For assigned_to_email
+                 updates, this MUST be the full, correct email address. Do not guess.
 
     Returns:
     str: Success message "Task updated successfully." if update completed, 

@@ -28,15 +28,25 @@ def search_customers(
     Searches for customers in the CRM database based on flexible filter criteria.
 
     Purpose:
-        Retrieves customer records matching any combination of search filters. Use this tool to find customers
+        Retrieves customer records matching **all** provided search filters. Use this tool to find customers
         by name, contact information, status, assigned sales representative, or date ranges. Returns up to 5
-        matching records to prevent overwhelming results.
+        matching records. **This tool is crucial for finding a customer_id before using update_customer or delete_customer.**
 
     Usage Examples:
-        - search_customers(customer_name="John") → Find all customers with "John" in their name
-        - search_customers(status="Lead", assigned_to_email="sam@example.com") → Find all leads assigned to Sam
-        - search_customers(follow_up_by_max="2023-12-31") → Find customers needing follow-up by year-end
-        - search_customers(product_interest="Software", status="Qualified") → Find qualified software prospects
+        - search_customers(customer_name="John") # Find all customers with "John" in their name
+        - search_customers(status="Lead", assigned_to_email="alice.johnson@example.com") # Find all leads assigned to Alice Johnson
+        - search_customers(follow_up_by_max="2023-12-31") # Find customers needing follow-up by year-end
+        - search_customers(product_interest="Software", status="Qualified", assigned_to_email="bob.wilson@example.com") # Find Bob's qualified software prospects
+
+    Common Workflow: Update customer by name:
+        1.  `search_customers(customer_name="Chris Miller")` # Find Chris Miller's record, note the `customer_id` (e.g., "00000133").
+        2.  `update_customer(customer_id="00000133", field="status", new_value="Lost")` # Use the found ID to perform the update.
+
+    Common Workflow: Reassign all customers from one user to another:
+        1.  `search_customers(assigned_to_email="david.brown@example.com")` # Find all customers assigned to David.
+        2.  Note all `customer_id`s from the result (e.g., "00000159", "00000020").
+        3.  `update_customer(customer_id="00000159", field="assigned_to_email", new_value="emily.davis@example.com")`
+        4.  `update_customer(customer_id="00000020", field="assigned_to_email", new_value="emily.davis@example.com")`
 
     Limitations:
         - Returns maximum of 5 records (oldest records first if more matches exist)
@@ -49,7 +59,7 @@ def search_customers(
         customer_email (str, optional): Partial or full email address of the customer (case-insensitive)
         product_interest (str, optional): Product category: "Software", "Hardware", "Services", "Consulting", or "Training"
         status (str, optional): Customer status: "Lead", "Qualified", "Proposal", "Won", or "Lost"
-        assigned_to_email (str, optional): Email of the sales representative assigned to the customer
+        assigned_to_email (str, optional): **Must be the full, complete email** of the sales representative (e.g., 'frank.garcia@example.com'). Use `company_directory.find_email_address` if you only have a name.
         last_contact_date_min (str, optional): Earliest last contact date in YYYY-MM-DD format
         last_contact_date_max (str, optional): Latest last contact date in YYYY-MM-DD format
         follow_up_by_min (str, optional): Earliest follow-up date in YYYY-MM-DD format
@@ -104,16 +114,18 @@ def update_customer(customer_id=None, field=None, new_value=None):
 
     Purpose:
         Modifies a single field of a customer record identified by customer ID. Use this to update contact
-        information, change status, reassign customers, update follow-up dates, or add notes. Email addresses
-        are automatically normalized to lowercase.
+        information, change status, reassign customers, update follow-up dates, or add notes.
+        **CRITICAL: You MUST have the correct customer_id to use this tool.** If you only have a customer's
+        name, you **must** use `search_customers` first to find their `customer_id`.
 
     Usage Examples:
-        - update_customer("00000001", "status", "Won") → Mark customer as closed-won
-        - update_customer("00000001", "notes", "Follow up needed urgently") → Add notes to customer record
-        - update_customer("00000042", "assigned_to_email", "jane@example.com") → Reassign customer to Jane
-        - update_customer("00000010", "follow_up_by", "2024-03-15") → Set new follow-up date
+        - update_customer("00000133", "status", "Won") # Mark customer 133 as closed-won
+        - update_customer("00000001", "notes", "Follow up needed urgently") # Add notes to customer record 1
+        - update_customer("00000042", "assigned_to_email", "grace.thompson@example.com") # Reassign customer 42 to Grace Thompson
+        - update_customer("00000010", "follow_up_by", "2024-03-15") # Set new follow-up date
 
     Limitations:
+        - Requires the exact, correct `customer_id`. Do not guess or use "00000001" unless you are certain.
         - Can only update one field at a time
         - Cannot modify customer_id field
         - Status must be one of: "Lead", "Qualified", "Proposal", "Won", "Lost"
@@ -121,11 +133,14 @@ def update_customer(customer_id=None, field=None, new_value=None):
         - Returns error if customer_id not found in database
 
     Args:
-        customer_id (str): 8-digit zero-padded customer ID (e.g., "00000001")
-        field (str): Name of field to update. Valid values: "customer_name", "assigned_to_email",
-            "customer_email", "customer_phone", "last_contact_date", "product_interest", "status",
-            "notes", "follow_up_by"
-        new_value (str): New value to set for the specified field. For dates, use YYYY-MM-DD format.
+        customer_id (str): 8-digit zero-padded customer ID (e.g., "00000001"). **Must be obtained via `search_customers` if not known.**
+        field (str): Name of field to update. **To reassign a customer, use 'assigned_to_email'.**
+            Valid values: "customer_name", "assigned_to_email", "customer_email", "customer_phone",
+            "last_contact_date", "product_interest", "status", "notes", "follow_up_by"
+        new_value (str): New value to set for the specified field.
+            - For dates, use YYYY-MM-DD format.
+            - If `field` is `assigned_to_email`, this **must be the full, complete email address**
+              (e.g., 'henry.martinez@example.com'). Use `company_directory.find_email_address` if you only have a name.
 
     Returns:
         str: Success message "Customer updated successfully." or error message describing the issue
@@ -177,11 +192,11 @@ def add_customer(
         are optional.
 
     Usage Examples:
-        - add_customer("John Doe", "sam@example.com", "Lead") → Minimal new lead
-        - add_customer("Acme Corp", "jane@example.com", "Qualified", customer_email="contact@acme.com",
-                       product_interest="Software") → Qualified prospect with contact details
-        - add_customer("Tech Startup", "sam@example.com", "Proposal", customer_phone="555-0123",
-                       follow_up_by="2024-04-01", notes="Pitched enterprise package") → Detailed opportunity
+        - add_customer("John Doe", "alice.johnson@example.com", "Lead") # Minimal new lead
+        - add_customer("Acme Corp", "bob.wilson@example.com", "Qualified", customer_email="contact@acme.com",
+                        product_interest="Software") # Qualified prospect with contact details
+        - add_customer("Tech Startup", "alice.johnson@example.com", "Proposal", customer_phone="555-0123",
+                        follow_up_by="2024-04-01", notes="Pitched enterprise package") # Detailed opportunity
 
     Limitations:
         - Requires exactly three mandatory fields: customer_name, assigned_to_email, status
@@ -192,14 +207,15 @@ def add_customer(
 
     Args:
         customer_name (str): Full name or company name of the customer (required)
-        assigned_to_email (str): Email address of the sales representative assigned to this customer (required)
+        assigned_to_email (str): **Must be the full, complete email address** (e.g., 'ivan.lee@example.com')
+            of the sales representative. Use `company_directory.find_email_address` if you only have a name. (required)
         status (str): Initial customer status - must be one of: "Lead", "Qualified", "Proposal", "Won", "Lost" (required)
         customer_email (str, optional): Email address of the customer
         customer_phone (str, optional): Phone number of the customer (any format)
-        last_contact_date (str, optional): Date of most recent contact in YYYY-MM-DD format
+        last_contact_date (str, optional): Date of most recent contact in YYYY-MM-DD format. **Only provide if explicitly stated.**
         product_interest (str, optional): Product category of interest: "Software", "Hardware", "Services", "Consulting", or "Training"
         notes (str, optional): Free-form text notes about the customer (default: empty string)
-        follow_up_by (str, optional): Target date for next follow-up in YYYY-MM-DD format
+        follow_up_by (str, optional): Target date for next follow-up in YYYY-MM-DD format. **Only provide if explicitly stated.**
 
     Returns:
         str: The auto-generated 8-digit zero-padded customer ID (e.g., "00000201") if successful,
@@ -239,21 +255,23 @@ def delete_customer(customer_id=None):
 
     Purpose:
         Deletes a customer record by ID. Use this to remove duplicate entries, test data, or customers
-        that should no longer be tracked. This operation cannot be undone, so verify the customer ID
-        before deletion.
+        that should no longer be tracked. This operation cannot be undone.
+        **CRITICAL: You MUST have the correct customer_id to use this tool.** If you only have a customer's
+        name, you **must** use `search_customers` first to find their `customer_id`.
 
     Usage Examples:
-        - delete_customer("00000001") → Remove customer with ID 00000001
-        - delete_customer("00000999") → Remove customer with ID 00000999
+        - delete_customer("00000001") # Remove customer with ID 00000001
+        - delete_customer("00000999") # Remove customer with ID 00000999
 
     Limitations:
+        - Requires the exact, correct `customer_id`. Do not guess.
         - Deletion is permanent and cannot be undone
         - Does not archive or create backup of deleted record
         - Returns error if customer_id not found in database
         - Requires exact customer ID match (case-sensitive)
 
     Args:
-        customer_id (str): 8-digit zero-padded customer ID to delete (e.g., "00000001")
+        customer_id (str): 8-digit zero-padded customer ID to delete (e.g., "00000001"). **Must be obtained via `search_customers` if not known.**
 
     Returns:
         str: Success message "Customer deleted successfully." if deletion succeeded, or error message
